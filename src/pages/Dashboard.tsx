@@ -9,29 +9,20 @@ import UsersChart from "../components/charts/UsersChart";
 import RecentOrders from "../components/dashboard/RecentOrders";
 import AIInsightCard from "../components/dashboard/AIInsightCard";
 
-import { type RecentOrder } from "../types/analytics";
-
 import { getFirstName } from "../utils/userUtils";
-import { getTotalRevenue, getTotalOrders, getTotalCustomers, getMonthlyRevenue, getMonthlyUsers, getRecentOrders } from "../services/analyticsService";
+
+import { getDashboardAnalytics } from "../services/analyticsService";
+import { type DashboardAnalytics } from "../types/analytics";
 
 function Dashboard() {
   const { user } = useAuth();
 
-  const [revenue, setRevenue] = useState(0);
-  const [orders, setOrders] = useState(0);
-  const [customers, setCustomers] = useState(0);
+  const [analytics, setAnalytics] =
+    useState<DashboardAnalytics | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [monthlyRevenue, setMonthlyRevenue] = useState<
-    { month: string; revenue: number }[]
-  >([]);
-  const [monthlyUsers, setMonthlyUsers] = useState<
-    { month: string; users: number }[]
-  >([]);
-
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
 
   const firstName = getFirstName(
     user?.user_metadata?.full_name
@@ -43,28 +34,18 @@ function Dashboard() {
         setLoading(true);
         setError(null);
 
-        const revenue = await getTotalRevenue();
-        const orders = await getTotalOrders();
-        const customers = await getTotalCustomers();
+        const data = await getDashboardAnalytics();
 
-        const monthlyRevenue = await getMonthlyRevenue();
-        const monthlyUsers = await getMonthlyUsers();
-
-        const ordersData = await getRecentOrders();
-
-        setRevenue(revenue);
-        setOrders(orders);
-        setCustomers(customers);
-
-        setMonthlyRevenue(monthlyRevenue);
-        setMonthlyUsers(monthlyUsers);
-
-        setRecentOrders(ordersData);
-
+        setAnalytics(data);
       } catch (error) {
-        console.error("Failed to load analytics:", error);
+        console.error(
+          "Failed to load analytics:",
+          error
+        );
 
-        setError("Unable to load analytics data.");
+        setError(
+          "Unable to load analytics data."
+        );
       } finally {
         setLoading(false);
       }
@@ -112,20 +93,25 @@ function Dashboard() {
 
       {/* Statistics */}
       <StatsGrid
-        revenue={revenue}
-        orders={orders}
-        customers={customers}
+        revenue={analytics?.revenue ?? 0}
+        orders={analytics?.orders ?? 0}
+        customers={analytics?.customers ?? 0}
       />
 
       {/* Charts */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <RevenueChart data={monthlyRevenue} />
-        <UsersChart data={monthlyUsers} />
+        <RevenueChart
+          data={analytics?.monthlyRevenue ?? []}
+        />
+        <UsersChart
+          data={analytics?.monthlyUsers ?? []}
+        />
       </div>
 
       {/* Orders */}
-      <RecentOrders orders={recentOrders} />
-
+      <RecentOrders
+        orders={analytics?.recentOrders ?? []}
+      />
       {/* AI */}
       <AIInsightCard />
     </div>

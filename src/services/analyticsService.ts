@@ -1,134 +1,130 @@
 import { supabase } from "../lib/supabaseClient";
 import { getCurrentCompanyId } from "./companyService";
 
-export async function getTotalRevenue() {
-    const companyId = await getCurrentCompanyId();
+import {
+  type DashboardAnalytics,
+  type MonthlyRevenue,
+  type MonthlyUsers,
+  type RecentOrder,
+  type OrderStatus,
+} from "../types/analytics";
 
-    const { data, error } = await supabase
-        .from("orders")
-        .select("total_amount")
-        .eq("company_id", companyId)
-        .eq("status", "completed");
-    
-    if (error) {
-        throw new Error(error.message);
-    }
+export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
+  const companyId = await getCurrentCompanyId();
 
-    return data.reduce(
-      (total, order) => total + Number(order.total_amount),
-      0
+  const [
+    revenue,
+    orders,
+    customers,
+    monthlyRevenue,
+    monthlyUsers,
+    recentOrders,
+  ] = await Promise.all([
+    getTotalRevenue(companyId),
+    countRows("orders", companyId),
+    countRows("customers",companyId),
+    getMonthlyRevenue(companyId),
+    getMonthlyUsers(companyId),
+    getRecentOrders(companyId),
+  ]);
+
+  return {
+    revenue,
+    orders,
+    customers,
+    monthlyRevenue,
+    monthlyUsers,
+    recentOrders,
+  };
+}
+
+async function getTotalRevenue(
+  companyId: string
+): Promise<number> {
+  const { data, error } = await supabase.rpc(
+    "get_total_revenue",
+    { p_company_id: companyId }
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  // La fonction renvoie un seul nombre (pas un tableau)
+  return Number(data ?? 0);
+}
+
+async function countRows(
+  table: "orders" | "customers",
+  companyId: string
+): Promise<number> {
+  const { count, error } = await supabase
+    .from(table)
+    // head: true -> Supabase ne renvoie AUCUNE ligne, seulement le total
+    .select("*", { count: "exact", head: true })
+    .eq("company_id", companyId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
+}
+
+// "2026-01" -> "Jan 2026"
+function formatMonth(yearMonth: string): string {
+  const [year, month] = yearMonth.split("-").map(Number);
+
+  return new Date(year, month - 1, 1).toLocaleString("en-US", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+async function getMonthlyRevenue(
+  companyId: string
+): Promise<MonthlyRevenue[]> {
+  // rpc = "remote procedure call" : on appelle la fonction SQL
+  const { data, error } = await supabase.rpc(
+    "get_monthly_revenue",
+    { p_company_id: companyId }
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as { month: string; revenue: number }[]).map(
+    (row) => ({
+      month: formatMonth(row.month),
+      revenue: Number(row.revenue),
+    })
+  );
+}
+
+async function getMonthlyUsers(
+  companyId: string
+): Promise<MonthlyUsers[]> {
+  const { data, error } = await supabase
+    .rpc("get_monthly_users",
+    { p_company_id: companyId }
     );
-}
-
-export async function getTotalOrders() {
-  const companyId = await getCurrentCompanyId();
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select("id")
-    .eq("company_id", companyId);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return data.length;
-}
-
-export async function getTotalCustomers() {
-  const companyId = await getCurrentCompanyId();
-
-  const { data, error } = await supabase
-    .from("customers")
-    .select("id")
-    .eq("company_id", companyId);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data.length;
-}
-
-export async function getMonthlyRevenue() {
-  const companyId = await getCurrentCompanyId();
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select("total_amount, created_at")
-    .eq("company_id", companyId)
-    .eq("status", "completed")
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const monthlyRevenue = data.reduce(
-    (acc: Record<string, number>, order) => {
-      const month = new Date(order.created_at).toLocaleString(
-        "en-US",
-        {
-          month: "short",
-        }
-      );
-
-      acc[month] =
-        (acc[month] || 0) + Number(order.total_amount);
-
-      return acc;
-    },
-    {}
-  );
-
-  return Object.entries(monthlyRevenue).map(
-    ([month, revenue]) => ({
-      month,
-      revenue,
+  return (data as { month: string; users: number }[]).map(
+    (row) => ({
+      month: formatMonth(row.month),
+      users: Number(row.users),
     })
   );
 }
 
-export async function getMonthlyUsers() {
-  const companyId = await getCurrentCompanyId();
-
-  const { data, error } = await supabase
-    .from("users")
-    .select("created_at")
-    .eq("company_id", companyId)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const monthlyUsers = data.reduce(
-    (acc: Record<string, number>, user) => {
-      const month = new Date(user.created_at).toLocaleString(
-        "en-US",
-        {
-          month: "short",
-        }
-      );
-
-      acc[month] = (acc[month] || 0) + 1;
-
-      return acc;
-    },
-    {}
-  );
-
-  return Object.entries(monthlyUsers).map(
-    ([month, users]) => ({
-      month,
-      users,
-    })
-  );
-}
-
-export async function getRecentOrders() {
-  const companyId = await getCurrentCompanyId();
-
+async function getRecentOrders(
+  companyId: string
+): Promise<RecentOrder[]> {
   const { data, error } = await supabase
     .from("orders")
     .select(`
@@ -141,12 +137,21 @@ export async function getRecentOrders() {
       )
     `)
     .eq("company_id", companyId)
-    .order("created_at", { ascending: false })
+    .order("created_at", {
+      ascending: false,
+    })
     .limit(5);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return data;
+  return data.map((order) => ({
+    id: order.id,
+    totalAmount: Number(order.total_amount),
+    status: order.status as OrderStatus,
+    createdAt: order.created_at,
+    customerName:
+      order.customers?.[0]?.name ?? "Unknown customer",
+  }));
 }

@@ -39,11 +39,11 @@ function RecentOrders({ orders }: RecentOrdersProps) {
                 </td>
 
                 <td className="px-5 py-4 text-gray-600">
-                  {order.customers?.[0]?.name ?? "Unknown"}
+                  {order.customerName}
                 </td>
 
                 <td className="px-5 py-4 text-gray-900">
-                  ${Number(order.total_amount).toLocaleString()}
+                  ${Number(order.totalAmount).toLocaleString()}
                 </td>
 
                 <td className="px-5 py-4">
