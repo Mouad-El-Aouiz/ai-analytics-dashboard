@@ -86,14 +86,18 @@ create table if not exists public.users (
   created_at timestamptz not null default now()
 );
 
--- status: the frontend expects 'pending' | 'completed' | 'cancelled'.
+-- status is restricted to the three values the frontend knows about.
+-- This also protects the revenue functions, which filter on 'completed':
+-- a typo like 'complete' would otherwise silently drop an order from the totals.
 create table if not exists public.orders (
   id           uuid primary key default gen_random_uuid(),
   company_id   uuid not null references public.companies (id) on delete cascade,
   customer_id  uuid references public.customers (id) on delete set null,
   status       text not null default 'pending',
   total_amount numeric not null,
-  created_at   timestamptz default now()
+  created_at   timestamptz default now(),
+  constraint orders_status_check
+    check (status in ('pending', 'completed', 'cancelled'))
 );
 
 -- No company_id here: ownership goes through the parent order.
