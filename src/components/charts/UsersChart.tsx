@@ -8,11 +8,10 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+import { type MonthlyUsers } from "../../types/analytics";
+
 interface UsersChartProps {
-  data: {
-    month: string;
-    users: number;
-  }[];
+  data: MonthlyUsers[];
 }
 
 function UsersChart({ data }: UsersChartProps) {

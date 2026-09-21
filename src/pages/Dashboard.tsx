@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useAuth } from "../context/useAuth";
 
 import StatsGrid from "../components/dashboard/StatsGrid";
@@ -11,48 +10,21 @@ import AIInsightCard from "../components/dashboard/AIInsightCard";
 
 import { getFirstName } from "../utils/userUtils";
 
-import { getDashboardAnalytics } from "../services/analyticsService";
-import { type DashboardAnalytics } from "../types/analytics";
+
+import { useDashboardAnalytics } from "../hooks/useDashboardAnalytics";
 
 function Dashboard() {
   const { user } = useAuth();
-
-  const [analytics, setAnalytics] =
-    useState<DashboardAnalytics | null>(null);
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
 
   const firstName = getFirstName(
     user?.user_metadata?.full_name
   );
 
-  useEffect(() => {
-    async function loadAnalytics() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const data = await getDashboardAnalytics();
-
-        setAnalytics(data);
-      } catch (error) {
-        console.error(
-          "Failed to load analytics:",
-          error
-        );
-
-        setError(
-          "Unable to load analytics data."
-        );
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadAnalytics();
-  }, []);
+  const {
+    analytics,
+    loading,
+    error,
+  } = useDashboardAnalytics();
 
   if (loading) {
     return (

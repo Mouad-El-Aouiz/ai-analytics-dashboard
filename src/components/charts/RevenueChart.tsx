@@ -8,11 +8,10 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+import { type MonthlyRevenue } from "../../types/analytics";
+
 interface RevenueChartProps {
-  data: {
-    month: string;
-    revenue: number;
-  }[];
+  data: MonthlyRevenue[];
 }
 
 
