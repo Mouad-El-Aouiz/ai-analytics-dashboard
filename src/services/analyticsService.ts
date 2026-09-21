@@ -122,6 +122,10 @@ async function getMonthlyUsers(
   );
 }
 
+// Supabase renvoie le client comme UN objet { name }, mais TypeScript croit
+// que c'est un tableau (le client Supabase n'est pas typé). On le lui explique.
+type CustomerRelation = { name: string } | null;
+
 async function getRecentOrders(
   companyId: string
 ): Promise<RecentOrder[]> {
@@ -152,6 +156,7 @@ async function getRecentOrders(
     status: order.status as OrderStatus,
     createdAt: order.created_at,
     customerName:
-      order.customers?.[0]?.name ?? "Unknown customer",
+      (order.customers as unknown as CustomerRelation)?.name ??
+      "Unknown customer",
   }));
 }
