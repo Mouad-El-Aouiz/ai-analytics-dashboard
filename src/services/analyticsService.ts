@@ -1,73 +1,128 @@
 import { supabase } from "../lib/supabaseClient";
 import { getCurrentCompanyId } from "./companyService";
 
+import type { DateRange } from "../types/dateRange";
+import { getPeriodBoundaries } from "../utils/dateUtils";
+
 import {
   type DashboardAnalytics,
   type MonthlyRevenue,
   type MonthlyUsers,
   type RecentOrder,
+  type StatWithChange,
   type OrderStatus,
 } from "../types/analytics";
 
-export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
+export async function getAnalytics(
+  dateRange: DateRange
+): Promise<DashboardAnalytics> {
   const companyId = await getCurrentCompanyId();
 
+  const { currentStart, previousStart, previousEnd } =
+    getPeriodBoundaries(dateRange);
+
   const [
-    revenue,
-    orders,
-    customers,
+    currentRevenue,
+    currentOrders,
+    currentCustomers,
     monthlyRevenue,
     monthlyUsers,
     recentOrders,
+    previousValues,
   ] = await Promise.all([
-    getTotalRevenue(companyId),
-    countRows("orders", companyId),
-    countRows("customers",companyId),
-    getMonthlyRevenue(companyId),
-    getMonthlyUsers(companyId),
-    getRecentOrders(companyId),
+    getTotalRevenue(companyId, currentStart),
+    countRows("orders", companyId, currentStart),
+    countRows("customers", companyId, currentStart),
+    getMonthlyRevenue(companyId, currentStart),
+    getMonthlyUsers(companyId, currentStart),
+    getRecentOrders(companyId, currentStart),
+    getPreviousValues(companyId, previousStart, previousEnd),
   ]);
 
   return {
-    revenue,
-    orders,
-    customers,
+    revenue: withChange(currentRevenue, previousValues?.revenue ?? null),
+    orders: withChange(currentOrders, previousValues?.orders ?? null),
+    customers: withChange(currentCustomers, previousValues?.customers ?? null),
     monthlyRevenue,
     monthlyUsers,
     recentOrders,
   };
 }
 
-async function getTotalRevenue(
-  companyId: string
-): Promise<number> {
-  const { data, error } = await supabase.rpc(
-    "get_total_revenue",
-    { p_company_id: companyId }
-  );
-
-  if (error) {
-    throw new Error(error.message);
+async function getPreviousValues(
+  companyId: string,
+  previousStart: Date | null,
+  previousEnd: Date | null
+) {
+  if (previousStart === null || previousEnd === null) {
+    return null;
   }
 
-  // La fonction renvoie un seul nombre (pas un tableau)
+  const [revenue, orders, customers] = await Promise.all([
+    getTotalRevenue(companyId, previousStart, previousEnd),
+    countRows("orders", companyId, previousStart, previousEnd),
+    countRows("customers", companyId, previousStart, previousEnd),
+  ]);
+
+  return { revenue, orders, customers };
+}
+
+// Transforme un nombre brut en { value, changePercent, trend }.
+function withChange(current: number, previous: number | null): StatWithChange {
+  if (previous === null) {
+    return { value: current, changePercent: null, trend: "neutral" };
+  }
+
+  if (previous === 0) {
+    // Diviser par zéro n'a pas de sens en pourcentage. On garde quand
+    // même la direction : toute croissance depuis zéro est "up".
+    return {
+      value: current,
+      changePercent: null,
+      trend: current > 0 ? "up" : "neutral",
+    };
+  }
+
+  const changePercent = ((current - previous) / previous) * 100;
+  const trend = changePercent > 0 ? "up" : changePercent < 0 ? "down" : "neutral";
+
+  return { value: current, changePercent, trend };
+}
+
+
+
+
+async function getTotalRevenue(
+  companyId: string,
+  startDate: Date | null,
+  endDate: Date | null = null
+): Promise<number> {
+  const { data, error } = await supabase.rpc("get_total_revenue", {
+    p_company_id: companyId,
+    p_start_date: startDate?.toISOString() ?? null,
+    p_end_date: endDate?.toISOString() ?? null,
+  });
+
+  if (error) throw new Error(error.message);
   return Number(data ?? 0);
 }
 
 async function countRows(
   table: "orders" | "customers",
-  companyId: string
+  companyId: string,
+  startDate: Date | null,
+  endDate: Date | null = null
 ): Promise<number> {
-  const { count, error } = await supabase
+  let query = supabase
     .from(table)
-    // head: true -> Supabase ne renvoie AUCUNE ligne, seulement le total
     .select("*", { count: "exact", head: true })
     .eq("company_id", companyId);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (startDate) query = query.gte("created_at", startDate.toISOString());
+  if (endDate) query = query.lt("created_at", endDate.toISOString());
 
+  const { count, error } = await query;
+  if (error) throw new Error(error.message);
   return count ?? 0;
 }
 
@@ -82,44 +137,57 @@ function formatMonth(yearMonth: string): string {
 }
 
 async function getMonthlyRevenue(
-  companyId: string
+  companyId: string,
+  startDate: Date | null
 ): Promise<MonthlyRevenue[]> {
-  // rpc = "remote procedure call" : on appelle la fonction SQL
   const { data, error } = await supabase.rpc(
     "get_monthly_revenue",
-    { p_company_id: companyId }
+    {
+      p_company_id: companyId,
+      p_start_date: startDate?.toISOString() ?? null,
+    }
   );
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return (data as { month: string; revenue: number }[]).map(
-    (row) => ({
-      month: formatMonth(row.month),
-      revenue: Number(row.revenue),
-    })
-  );
+  return (
+    data as {
+      month: string;
+      revenue: number | string;
+    }[]
+  ).map((row) => ({
+    month: formatMonth(row.month),
+    revenue: Number(row.revenue),
+  }));
 }
 
 async function getMonthlyUsers(
-  companyId: string
+  companyId: string,
+  startDate: Date | null
 ): Promise<MonthlyUsers[]> {
-  const { data, error } = await supabase
-    .rpc("get_monthly_users",
-    { p_company_id: companyId }
-    );
+  const { data, error } = await supabase.rpc(
+    "get_monthly_users",
+    {
+      p_company_id: companyId,
+      p_start_date: startDate?.toISOString() ?? null,
+    }
+  );
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return (data as { month: string; users: number }[]).map(
-    (row) => ({
-      month: formatMonth(row.month),
-      users: Number(row.users),
-    })
-  );
+  return (
+    data as {
+      month: string;
+      users: number | string;
+    }[]
+  ).map((row) => ({
+    month: formatMonth(row.month),
+    users: Number(row.users),
+  }));
 }
 
 // Supabase renvoie le client comme UN objet { name }, mais TypeScript croit
@@ -127,9 +195,10 @@ async function getMonthlyUsers(
 type CustomerRelation = { name: string } | null;
 
 async function getRecentOrders(
-  companyId: string
+  companyId: string,
+  startDate: Date | null
 ): Promise<RecentOrder[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("orders")
     .select(`
       id,
@@ -140,7 +209,16 @@ async function getRecentOrders(
         name
       )
     `)
-    .eq("company_id", companyId)
+    .eq("company_id", companyId);
+
+  if (startDate) {
+    query = query.gte(
+      "created_at",
+      startDate.toISOString()
+    );
+  }
+
+  const { data, error } = await query
     .order("created_at", {
       ascending: false,
     })
@@ -156,7 +234,7 @@ async function getRecentOrders(
     status: order.status as OrderStatus,
     createdAt: order.created_at,
     customerName:
-      (order.customers as unknown as CustomerRelation)?.name ??
-      "Unknown customer",
+      (order.customers as unknown as CustomerRelation)
+        ?.name ?? "Unknown customer",
   }));
 }

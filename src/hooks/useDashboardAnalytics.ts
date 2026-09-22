@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { getDashboardAnalytics } from "../services/analyticsService";
-import { type DashboardAnalytics } from "../types/analytics";
+import { getAnalytics } from "../services/analyticsService";
+import type { DashboardAnalytics } from "../types/analytics";
+import type { DateRange } from "../types/dateRange";
 
-export function useDashboardAnalytics() {
+export function useDashboardAnalytics(dateRange: DateRange) {
   const [analytics, setAnalytics] =
     useState<DashboardAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Changer ce nombre relance l'effet : c'est ce que fait refetch.
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    // Devient true quand cet effet est remplacé (démontage, StrictMode,
-    // ou nouveau reloadKey) : l'ancienne requête ne doit rien afficher.
     let ignore = false;
 
     async function loadAnalytics() {
@@ -21,7 +18,7 @@ export function useDashboardAnalytics() {
         setLoading(true);
         setError(null);
 
-        const data = await getDashboardAnalytics();
+        const data = await getAnalytics(dateRange);
 
         if (!ignore) setAnalytics(data);
       } catch (err) {
@@ -39,7 +36,8 @@ export function useDashboardAnalytics() {
     return () => {
       ignore = true;
     };
-  }, [reloadKey]);
+    // dateRange fait partie des dépendances exprès : le changer doit recharger.
+  }, [dateRange, reloadKey]);
 
   const refetch = useCallback(() => {
     setReloadKey((key) => key + 1);

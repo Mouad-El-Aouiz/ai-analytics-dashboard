@@ -1,8 +1,7 @@
 import { subDays, subMonths, subYears } from "date-fns";
 import type { DateRange } from "../types/dateRange";
 
-// "now" est un paramètre (avec une valeur par défaut) pour pouvoir
-// tester la fonction avec une date fixe plutôt que l'heure réelle.
+
 export function getStartDate(
   dateRange: DateRange,
   now: Date = new Date()
@@ -26,4 +25,29 @@ export function getStartDate(
     case "all":
       return null;
   }
+}
+
+export interface PeriodBoundaries {
+  currentStart: Date | null;
+  previousStart: Date | null;
+  previousEnd: Date | null;
+}
+
+export function getPeriodBoundaries(
+  dateRange: DateRange,
+  now: Date = new Date()
+): PeriodBoundaries {
+  const currentStart = getStartDate(dateRange, now);
+
+  if (currentStart === null) {
+    return { currentStart: null, previousStart: null, previousEnd: null };
+  }
+
+  const previousStart = getStartDate(dateRange, currentStart);
+
+  return {
+    currentStart,
+    previousStart,
+    previousEnd: currentStart,
+  };
 }
