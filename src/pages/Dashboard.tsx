@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAuth } from "../context/useAuth";
 
 import StatsGrid from "../components/dashboard/StatsGrid";
@@ -12,6 +13,7 @@ import { getFirstName } from "../utils/userUtils";
 
 
 import { useDashboardAnalytics } from "../hooks/useDashboardAnalytics";
+import type { DateRange } from "../types/dateRange";
 
 function Dashboard() {
   const { user } = useAuth();
@@ -20,11 +22,9 @@ function Dashboard() {
     user?.user_metadata?.full_name
   );
 
-  const {
-    analytics,
-    loading,
-    error,
-  } = useDashboardAnalytics();
+  const [dateRange, setDateRange] = useState<DateRange>("30d");
+
+  const { analytics, loading, error } = useDashboardAnalytics(dateRange);
 
   if (loading) {
     return (
@@ -56,18 +56,25 @@ function Dashboard() {
           </p>
         </div>
 
-        <select className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none">
-          <option>Last 30 days</option>
-          <option>Last 7 days</option>
-          <option>Last 90 days</option>
+        <select
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none"
+          value={dateRange}
+          onChange={(event) => setDateRange(event.target.value as DateRange)}
+        >
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="6m">Last 6 months</option>
+          <option value="12m">Last 12 months</option>
+          <option value="all">All time</option>
         </select>
       </div>
 
       {/* Statistics */}
       <StatsGrid
-        revenue={analytics?.revenue ?? 0}
-        orders={analytics?.orders ?? 0}
-        customers={analytics?.customers ?? 0}
+        revenue={analytics?.revenue ?? { value: 0, changePercent: null, trend: "neutral" }}
+        orders={analytics?.orders ?? { value: 0, changePercent: null, trend: "neutral" }}
+        customers={analytics?.customers ?? { value: 0, changePercent: null, trend: "neutral" }}
       />
 
       {/* Charts */}

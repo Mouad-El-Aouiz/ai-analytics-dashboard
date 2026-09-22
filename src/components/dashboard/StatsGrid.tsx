@@ -1,9 +1,10 @@
 import StatCard from "./StatCard";
+import type { StatWithChange } from "../../types/analytics";
 
 interface StatsGridProps {
-  revenue: number;
-  orders: number;
-  customers: number;
+  revenue: StatWithChange;
+  orders: StatWithChange;
+  customers: StatWithChange;
 }
 
 function StatsGrid({
@@ -14,21 +15,21 @@ function StatsGrid({
   const stats = [
     {
       title: "Revenue",
-      value: `$${revenue.toLocaleString()}`,
-      change: "—",
-      trend: "up" as const,
+      value: `$${revenue.value.toLocaleString()}`,
+      changePercent: revenue.changePercent,
+      trend: revenue.trend,
     },
     {
       title: "Orders",
-      value: orders.toLocaleString(),
-      change: "—",
-      trend: "up" as const,
+      value: orders.value.toLocaleString(),
+      changePercent: orders.changePercent,
+      trend: orders.trend,
     },
     {
       title: "Customers",
-      value: customers.toLocaleString(),
-      change: "—",
-      trend: "up" as const,
+      value: customers.value.toLocaleString(),
+      changePercent: customers.changePercent,
+      trend: customers.trend,
     },
   ];
 
@@ -39,7 +40,7 @@ function StatsGrid({
           key={stat.title}
           title={stat.title}
           value={stat.value}
-          change={stat.change}
+          changePercent={stat.changePercent}
           trend={stat.trend}
         />
       ))}
@@ -48,5 +49,3 @@ function StatsGrid({
 }
 
 export default StatsGrid;
-
-  
