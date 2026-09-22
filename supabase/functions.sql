@@ -90,8 +90,22 @@ create trigger on_auth_user_created
 -- they would bypass RLS and could expose another company's data.
 
 -- Total revenue of a company (completed orders only).
--- coalesce(..., 0): the sum of zero rows is NULL, not 0.
-create or replace function public.get_total_revenue(p_company_id uuid)
+-- p_start_date / p_end_date are optional: NULL means "no bound on this side".
+-- Used both for a single period (only p_start_date) and to isolate one
+-- window in time (both bounds), e.g. to compute a "previous period" total.
+--
+-- Older deployed signatures are dropped first: without this, "create or
+-- replace" would add a new overload instead of replacing the function,
+-- and calls that name only p_company_id would then fail with
+-- "function is not unique".
+drop function if exists public.get_total_revenue(uuid);
+drop function if exists public.get_total_revenue(uuid, timestamptz);
+
+create or replace function public.get_total_revenue(
+  p_company_id uuid,
+  p_start_date timestamptz default null,
+  p_end_date   timestamptz default null
+)
 returns numeric
 language sql
 stable
@@ -100,42 +114,72 @@ as $$
   select coalesce(sum(total_amount), 0)
   from public.orders
   where company_id = p_company_id
-    and status = 'completed';
+    and status = 'completed'
+    and (p_start_date is null or created_at >= p_start_date)
+    and (p_end_date   is null or created_at <  p_end_date);
 $$;
 
 -- Revenue per month (completed orders only).
--- Months are returned as 'YYYY-MM' so Jan 2025 and Jan 2026 stay separate.
--- The column names below are a contract with the frontend
--- (analyticsService.ts reads row.month and row.revenue).
-create or replace function public.get_monthly_revenue(p_company_id uuid)
-returns table (month text, revenue numeric)
+-- Frontend contract: row.month and row.revenue.
+drop function if exists public.get_monthly_revenue(uuid);
+
+create or replace function public.get_monthly_revenue(
+  p_company_id uuid,
+  p_start_date timestamptz default null
+)
+returns table (
+  month text,
+  revenue numeric
+)
 language sql
 stable
 security invoker
 as $$
   select
-    to_char(date_trunc('month', created_at), 'YYYY-MM') as month,
+    to_char(
+      date_trunc('month', created_at),
+      'YYYY-MM'
+    ) as month,
     sum(total_amount) as revenue
   from public.orders
   where company_id = p_company_id
     and status = 'completed'
+    and (
+      p_start_date is null
+      or created_at >= p_start_date
+    )
   group by 1
   order by 1;
 $$;
 
 -- New users per month.
 -- Frontend contract: row.month and row.users.
-create or replace function public.get_monthly_users(p_company_id uuid)
-returns table (month text, users bigint)
+drop function if exists public.get_monthly_users(uuid);
+
+create or replace function public.get_monthly_users(
+  p_company_id uuid,
+  p_start_date timestamptz default null
+)
+returns table (
+  month text,
+  users bigint
+)
 language sql
 stable
 security invoker
 as $$
   select
-    to_char(date_trunc('month', created_at), 'YYYY-MM') as month,
+    to_char(
+      date_trunc('month', created_at),
+      'YYYY-MM'
+    ) as month,
     count(*) as users
   from public.users
   where company_id = p_company_id
+    and (
+      p_start_date is null
+      or created_at >= p_start_date
+    )
   group by 1
   order by 1;
 $$;
