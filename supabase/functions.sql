@@ -183,3 +183,110 @@ as $$
   group by 1
   order by 1;
 $$;
+
+-- Orders grouped by status (orders of every status, not only completed),
+-- with how many there are and how much they are worth in total.
+-- Frontend contract: row.status, row.order_count and row.total_amount.
+--
+-- Older deployed signatures are dropped first: without this, "create or
+-- replace" would add a new overload instead of replacing the function, and
+-- calls that name only p_company_id would then fail with
+-- "function is not unique".
+drop function if exists public.get_orders_by_status(uuid);
+drop function if exists public.get_orders_by_status(uuid, timestamptz);
+
+create or replace function public.get_orders_by_status(
+  p_company_id uuid,
+  p_start_date timestamptz default null
+)
+returns table (
+  status text,
+  order_count bigint,
+  total_amount numeric
+)
+language sql
+stable
+security invoker
+as $$
+  select
+    status,
+    count(*) as order_count,
+    coalesce(sum(total_amount), 0) as total_amount
+  from public.orders
+  where company_id = p_company_id
+    and (
+      p_start_date is null
+      or created_at >= p_start_date
+    )
+  group by status
+  order by status;
+$$;
+
+-- Revenue per product (completed orders only), highest first.
+-- Joins order_items to get the product of each line, and orders to keep only
+-- completed ones. Frontend contract: row.product, row.category, row.revenue.
+drop function if exists public.get_revenue_by_product(uuid);
+drop function if exists public.get_revenue_by_product(uuid, timestamptz);
+
+create or replace function public.get_revenue_by_product(
+  p_company_id uuid,
+  p_start_date timestamptz default null
+)
+returns table (
+  product text,
+  category text,
+  revenue numeric
+)
+language sql
+stable
+security invoker
+as $$
+  select
+    p.name as product,
+    coalesce(p.category, 'Uncategorized') as category,
+    sum(oi.quantity * oi.unit_price) as revenue
+  from public.order_items oi
+  join public.orders o on o.id = oi.order_id
+  join public.products p on p.id = oi.product_id
+  where o.company_id = p_company_id
+    and o.status = 'completed'
+    and (
+      p_start_date is null
+      or o.created_at >= p_start_date
+    )
+  group by p.name, p.category
+  order by revenue desc;
+$$;
+
+-- Revenue per product category (completed orders only), highest first.
+-- Frontend contract: row.category and row.revenue.
+drop function if exists public.get_revenue_by_category(uuid);
+drop function if exists public.get_revenue_by_category(uuid, timestamptz);
+
+create or replace function public.get_revenue_by_category(
+  p_company_id uuid,
+  p_start_date timestamptz default null
+)
+returns table (
+  category text,
+  revenue numeric
+)
+language sql
+stable
+security invoker
+as $$
+  select
+    coalesce(p.category, 'Uncategorized') as category,
+    sum(oi.quantity * oi.unit_price) as revenue
+  from public.order_items oi
+  join public.orders o on o.id = oi.order_id
+  join public.products p on p.id = oi.product_id
+  where o.company_id = p_company_id
+    and o.status = 'completed'
+    and (
+      p_start_date is null
+      or o.created_at >= p_start_date
+    )
+  group by 1
+  order by revenue desc;
+$$;
