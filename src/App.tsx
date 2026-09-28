@@ -7,6 +7,11 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardLayout from "./layouts/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import Analytics from "./pages/Analytics";
+import AIInsights from "./pages/AIInsights";
+import Reports from "./pages/Reports";
+import Settings from "./pages/Settings";
+import NotFound from "./pages/NotFound";
+
 
 function App() {
   return (
@@ -19,9 +24,14 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/analytics" element={<Analytics />}/>
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/ai-insights" element={<AIInsights />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
         </Route>
+
+        <Route path="*" element={<NotFound />} />
 
       </Routes>
     </BrowserRouter>

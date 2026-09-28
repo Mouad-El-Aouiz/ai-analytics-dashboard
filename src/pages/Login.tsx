@@ -19,7 +19,6 @@ function Login() {
 
       await signIn(email, password);
 
-      console.log("Login successful");
 
       navigate("/");
     } catch (error) {
@@ -87,6 +86,17 @@ function Login() {
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-gray-500">
+          Don't have an account?{" "}
+          <button
+            type="button"
+            onClick={() => navigate("/register")}
+            className="font-medium text-gray-900 hover:underline"
+          >
+            Register
+          </button>
+        </p>
       </div>
     </div>
   );
