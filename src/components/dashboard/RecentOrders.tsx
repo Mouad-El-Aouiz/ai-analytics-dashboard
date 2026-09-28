@@ -2,9 +2,15 @@ import { type RecentOrder } from "../../types/analytics";
 
 interface RecentOrdersProps {
   orders: RecentOrder[];
+  // Message affiché quand la liste est vide. Un texte par défaut est utilisé
+  // si l'appelant n'en fournit pas (ex. quand une recherche ne renvoie rien).
+  emptyMessage?: string;
 }
 
-function RecentOrders({ orders }: RecentOrdersProps) {
+function RecentOrders({
+  orders,
+  emptyMessage = "No orders in this period.",
+}: RecentOrdersProps) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="border-b border-gray-200 p-5">
@@ -29,6 +35,17 @@ function RecentOrders({ orders }: RecentOrdersProps) {
           </thead>
 
           <tbody>
+            {orders.length === 0 && (
+              <tr>
+                <td
+                  colSpan={4}
+                  className="px-5 py-8 text-center text-gray-500"
+                >
+                  {emptyMessage}
+                </td>
+              </tr>
+            )}
+
             {orders.map((order) => (
               <tr
                 key={order.id}

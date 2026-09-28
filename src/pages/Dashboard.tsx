@@ -1,5 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
+
 import { useAuth } from "../context/useAuth";
+import type { DashboardOutletContext } from "../layouts/DashboardLayout";
+
+import StatsGridSkeleton from "../components/ui/StatsGridSkeleton";
+import ChartSkeleton from "../components/ui/ChartSkeleton";
+import TableSkeleton from "../components/ui/TableSkeleton";
 
 import StatsGrid from "../components/dashboard/StatsGrid";
 
@@ -12,7 +19,8 @@ import AIInsightCard from "../components/dashboard/AIInsightCard";
 import { getFirstName } from "../utils/userUtils";
 
 
-import { useDashboardAnalytics } from "../hooks/useDashboardAnalytics";
+import { useAnalytics } from "../hooks/useAnalytics";
+import { buildForecast } from "../services/insightsService";
 import type { DateRange } from "../types/dateRange";
 
 function Dashboard() {
@@ -24,12 +32,55 @@ function Dashboard() {
 
   const [dateRange, setDateRange] = useState<DateRange>("30d");
 
-  const { analytics, loading, error } = useDashboardAnalytics(dateRange);
+  // La recherche vient du Header (via le layout) : elle filtre les
+  // commandes récentes affichées sur cette page.
+  const { searchQuery } = useOutletContext<DashboardOutletContext>();
+
+  const {
+    analytics,
+    loading,
+    error,
+  } = useAnalytics(dateRange);
+
+
+  const revenueForecast = useMemo(
+    () => buildForecast(analytics?.monthlyRevenue ?? []),
+    [analytics?.monthlyRevenue]
+  );
+
+  // Filtre insensible à la casse sur le client, l'ID et le statut.
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+
+  const filteredOrders = normalizedQuery
+    ? (analytics?.recentOrders ?? []).filter((order) => {
+      const haystack = [
+        order.customerName,
+        order.id,
+        order.status,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(normalizedQuery);
+    })
+    : analytics?.recentOrders ?? [];
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <p className="text-gray-500">Loading analytics...</p>
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div>
+          <div className="h-8 w-64 animate-pulse rounded-md bg-gray-200" />
+          <div className="mt-2 h-4 w-80 animate-pulse rounded-md bg-gray-200" />
+        </div>
+
+        <StatsGridSkeleton count={4} />
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <ChartSkeleton />
+          <ChartSkeleton />
+        </div>
+
+        <TableSkeleton rows={5} />
       </div>
     );
   }
@@ -41,6 +92,7 @@ function Dashboard() {
       </div>
     );
   }
+
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -59,7 +111,9 @@ function Dashboard() {
         <select
           className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none"
           value={dateRange}
-          onChange={(event) => setDateRange(event.target.value as DateRange)}
+          onChange={(event) =>
+            setDateRange(event.target.value as DateRange)
+          }
         >
           <option value="7d">Last 7 days</option>
           <option value="30d">Last 30 days</option>
@@ -71,17 +125,11 @@ function Dashboard() {
       </div>
 
       {/* Statistics */}
-      <StatsGrid
-        revenue={analytics?.revenue ?? { value: 0, changePercent: null, trend: "neutral" }}
-        orders={analytics?.orders ?? { value: 0, changePercent: null, trend: "neutral" }}
-        customers={analytics?.customers ?? { value: 0, changePercent: null, trend: "neutral" }}
-      />
+      <StatsGrid analytics={analytics} />
 
       {/* Charts */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <RevenueChart
-          data={analytics?.monthlyRevenue ?? []}
-        />
+        <RevenueChart data={revenueForecast} />
         <UsersChart
           data={analytics?.monthlyUsers ?? []}
         />
@@ -89,10 +137,15 @@ function Dashboard() {
 
       {/* Orders */}
       <RecentOrders
-        orders={analytics?.recentOrders ?? []}
+        orders={filteredOrders}
+        emptyMessage={
+          normalizedQuery
+            ? `No orders match "${searchQuery.trim()}".`
+            : "No orders in this period."
+        }
       />
       {/* AI */}
-      <AIInsightCard />
+      <AIInsightCard analytics={analytics} />
     </div>
   );
 }
