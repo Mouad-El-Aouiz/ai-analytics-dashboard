@@ -94,6 +94,29 @@ using (
   )
 );
 
+-- A user may rename their own company (Settings page). The "with check"
+-- makes sure the row still belongs to their company after the update, so
+-- they cannot move it to another company's id.
+drop policy if exists "Users can update their own company" on public.companies;
+create policy "Users can update their own company"
+on public.companies
+for update
+to authenticated
+using (
+  id = (
+    select company_id
+    from public.profiles
+    where id = (select auth.uid())
+  )
+)
+with check (
+  id = (
+    select company_id
+    from public.profiles
+    where id = (select auth.uid())
+  )
+);
+
 
 -- ----------------------------------------------------------------------------
 -- products: full access, limited to the user's company
