@@ -179,7 +179,7 @@ serve(async (req) => {
     let insights: AiInsightsResponse;
     try {
       insights = JSON.parse(text);
-    } catch (parseError) {
+    } catch {
       console.error("Failed to parse Groq JSON:", text);
       return new Response(
         JSON.stringify({ error: "Groq returned invalid JSON." }),

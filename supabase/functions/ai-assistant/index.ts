@@ -166,7 +166,7 @@ serve(async (req) => {
     let parsed: AssistantResponse;
     try {
       parsed = JSON.parse(text);
-    } catch (parseError) {
+    } catch {
       console.error("Failed to parse Groq JSON:", text);
       return new Response(
         JSON.stringify({ error: "Groq returned invalid JSON." }),
