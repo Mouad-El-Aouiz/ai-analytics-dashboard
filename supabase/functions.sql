@@ -290,3 +290,31 @@ as $$
   group by 1
   order by revenue desc;
 $$;
+
+-- Total customers (all time, no time filter)
+create or replace function public.get_total_customers(
+  p_company_id uuid
+)
+returns bigint
+language sql
+stable
+security invoker
+as $$
+  select count(*)
+  from public.customers
+  where company_id = p_company_id;
+$$;
+
+-- Total users (all time, no time filter)
+create or replace function public.get_total_users(
+  p_company_id uuid
+)
+returns bigint
+language sql
+stable
+security invoker
+as $$
+  select count(*)
+  from public.users
+  where company_id = p_company_id;
+$$;
